@@ -1,7 +1,6 @@
 
 
 let map
-
 let dataPaths = ['Turkiye_iller.geojson', 'Turkiye_ilceler.geojson']
 let pathIndex = 0
 let zoomLevel = 5.5
@@ -67,13 +66,7 @@ function resetSubPolygons(subPolygons){
 //if clicked polygon layer level is equal to previous then set previous clicked polygon options
 function setPrevClickedPolygon(clickedPolygon, prevClickedPolygon){
 
-    
-    if(clickedPolygon.layerLevel == prevClickedPolygon.layerLevel){
-
-        
-        makeDarkPolygon(prevClickedPolygon)
-       
-    }
+    if(clickedPolygon.layerLevel == prevClickedPolygon.layerLevel)  makeDarkPolygon(prevClickedPolygon)
 }
 
 
