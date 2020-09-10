@@ -1,7 +1,7 @@
 
 
 let map
-let dataPaths = ['Turkiye_iller.geojson', 'Turkiye_ilceler.geojson']
+let dataPaths = ['guneydogu_anadolu.json', 'gaziantep.json', 'gaziantep_oguzeli.json']
 let pathIndex = 0
 let zoomLevel = 5.5
 let layerCounter = 0
@@ -20,10 +20,11 @@ function initMap(){
     center: { lat: 39.925533, lng:  32.866287}
   })
 
-  drawPolygons(dataPaths[pathIndex])
+  drawPolygons()
 
-  
 }
+
+
 
 function makeDarkPolygon(polygon){
 
@@ -47,6 +48,7 @@ function makeDarkPolygon(polygon){
 
 }
 
+
 function resetSubPolygons(subPolygons){
 
     let options = {
@@ -67,10 +69,18 @@ function resetSubPolygons(subPolygons){
 function setPrevClickedPolygon(clickedPolygon, prevClickedPolygon){
 
     if(clickedPolygon.layerLevel == prevClickedPolygon.layerLevel)  makeDarkPolygon(prevClickedPolygon)
+    // if(!polygon.isLastLayer){
+    //     polygon.addListener('click',  {passive: false})
+    //     polygon.addListener('mouseover',  {passive: false})
+    //     polygon.addListener('mouseout',  {passive: false})
+    // }
+    
+    
 }
 
 
 function setPolygons(polygonList, clickedPolygon, prevClickedPolygon) {
+
     resetClickedPolygon(clickedPolygon)
 
     if(clickedPolygon == null){
@@ -116,12 +126,25 @@ function setPolygons(polygonList, clickedPolygon, prevClickedPolygon) {
 function resetClickedPolygon(polygon){
 
 
-    if(polygon == null) return 
+    if(polygon == null) return
+    // if(!polygon.isLastLayer){
+    //     polygon.addListener('click',  {passive: true})
+    //     polygon.addListener('mouseover',  {passive: true})
+    //     polygon.addListener('mouseout',  {passive: true})
+    // }
+
     let options = {
         strokeOpacity: 1,
         strokeWeight: 0,
         fillOpacity: 0,
     }
+
+    // if(polygon.isLastLayer){
+    //     options.strokeColor = '#000000'
+    //     options.strokeWeight = 1.2
+    // }
+
+ 
 
     polygon.setOptions(options)
     polygon.addListener('mouseout', () => polygon.setOptions(options))
@@ -144,71 +167,53 @@ function setPolygonMouseOver(polygon){
     })
 }
 
+function drawPolygons(prevClickedPolygon=null, model=null, relatedModelId=null){
 
-
-
-function drawPolygons(dataPath, prevClickedPolygon){
-
-  dataPath = './src/data/' + dataPath
-
-
-  fetch(dataPath)
-    .then(response => response.json())
-    .then(data =>{
+    let path
+    console.log(`model: ${model}`)
+    if(model === null){
+       
+        path = 'region/'
+    }
+    else if(model !== null && relatedModelId !== null ){
+        path = `${model}/${relatedModelId}/`
+    }
+    if(path === undefined) {
+       
+        console.log('path is undefined')
+        return
+    }
+    console.log(`prevClickedPolygon: ${prevClickedPolygon}, model: ${model}, `)
+    console.log(`path ${path}`)
+    fetch(`http://127.0.0.1:8000/service/${path}`)
+    .then(res => res.json())
+    .then(data => {
 
         let name
-        
-        for(const index in data.features){
+        console.log(data)
+        for(const obj of data){
 
-            let coordinates = []
-            const prop = data.features[index]
-            
-            name = prop.properties.CITY
+            name = obj.name
+            console.log(obj)
 
-        
-            if(layerCounter != 0 && prevClickedPolygon.name !== name) continue
-          
-
-            switch(prop.properties.TYPE){
-                case 'District':
-                    break
-            }
-            
-        
-            prop.geometry.coordinates.forEach(elem => {
-        
-                elem.forEach(latLng => {
-
-                    latLng.forEach(a =>{
-                        
-                        coordinates.push({ lat: a[1], lng: a[0]})
-        
-                    })
-                })
-        
-            })
-            
-            let bounds = new google.maps.LatLngBounds()
-
-            for(let coordinate of coordinates) bounds.extend(coordinate)
-
-        
             let polygon = new google.maps.Polygon({
-                paths: coordinates,
+                paths: obj.coordinates,
                 strokeOpacity: 0,
                 strokeWeight: 0,
                 fillOpacity: 0,
                 name: name,
+                id: obj.id,
                 layerLevel: layerCounter,
                 zoomLevel: () =>{
 
                     if(prevClickedPolygon==null) return 7
-                    let zoomLevel = prevClickedPolygon.zoomLevel
+                    let zoomLevel = prevClickedPolygon.zoomLevel()
                     return prevClickedPolygon.layerLevel < polygon.layerLevel ? ++zoomLevel : zoomLevel
 
                 },
                 subPolygons: [],
-                prevClickedPolygon: prevClickedPolygon
+                prevClickedPolygon: prevClickedPolygon,
+                isLastLayer: false
 
             })
 
@@ -240,35 +245,41 @@ function drawPolygons(dataPath, prevClickedPolygon){
                 })
             })
 
-
-            
-        
             polygon.addListener('click', () =>{
 
-              
                 let prevClickedPolygon = clickedPolygons.pop()
-                
-                makeDarkPolygon(polygon)
-
-                if(prevClickedPolygon != null) {
-                    if (polygon.layerLevel < prevClickedPolygon.layerLevel) pathIndex++ 
-                }
-                else pathIndex++ 
-                
-                if(pathIndex < dataPaths.length){
-                    layerCounter++
-                    drawPolygons(dataPaths[pathIndex], polygon)
+                let model 
+                switch(obj.model){
                     
-                    map.setOptions({
-                        zoom: polygon.zoomLevel(),
-                        center: bounds.getCenter()
-                    })
+                    case 'Region':
+                        model = 'city'
+                        break
+                    case 'City':
+                        model = 'county'
+                        break
+                    case 'County':
+                        model = 'neighborhood'
+                        break
                 }
+
+                drawPolygons(prevClickedPolygon, model, polygon.id)
+
+                let bounds = new google.maps.LatLngBounds()
+
+                for(let coordinate of obj.coordinates) bounds.extend(coordinate)
+                
+                map.setOptions({
+                    zoom: polygon.zoomLevel(),
+                    center: bounds.getCenter()
+                })
+        
+            
+                if(!polygon.isLastLayer) makeDarkPolygon(polygon)
 
                 setPolygons(polygonList, polygon, prevClickedPolygon)
-               
+
                 clickedPolygons.push(polygon)
-  
+
             })
             
             polygon.setMap(map)
@@ -281,6 +292,7 @@ function drawPolygons(dataPath, prevClickedPolygon){
 
     })
     .catch(err => console.log(err))
+
 
 }
 
